@@ -38,3 +38,6 @@ hs_err_*.log
 replay_*.log
 *.hprof
 *.jfr
+
+# локальная копия Gradle не нужна — используется gradle wrapper
+gradle-tmp/

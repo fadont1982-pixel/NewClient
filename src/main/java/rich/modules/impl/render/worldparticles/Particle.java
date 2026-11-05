@@ -14,7 +14,7 @@ import rich.util.ColorUtil;
 import rich.util.animations.Animation;
 import rich.util.animations.Direction;
 import rich.util.animations.EaseInOutQuad;
-import rich.util.render.сliemtpipeline.ClientPipelines;
+import rich.util.render.clientpipeline.ClientPipelines;
 
 import java.util.concurrent.ThreadLocalRandom;
 

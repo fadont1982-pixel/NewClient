@@ -12,7 +12,7 @@ import org.joml.Matrix4f;
 import rich.IMinecraft;
 import rich.modules.impl.player.FreeCam;
 import rich.util.ColorUtil;
-import rich.util.render.сliemtpipeline.ClientPipelines;
+import rich.util.render.clientpipeline.ClientPipelines;
 
 
 @UtilityClass

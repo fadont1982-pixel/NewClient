@@ -18,7 +18,7 @@ import rich.modules.module.setting.implement.BooleanSetting;
 import rich.modules.module.setting.implement.ColorSetting;
 import rich.modules.module.setting.implement.SliderSettings;
 import rich.util.ColorUtil;
-import rich.util.render.сliemtpipeline.ClientPipelines;
+import rich.util.render.clientpipeline.ClientPipelines;
 import rich.util.timer.StopWatch;
 
 import java.util.ArrayList;

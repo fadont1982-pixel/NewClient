@@ -4,7 +4,7 @@ import net.minecraft.client.render.RenderLayer;
 import net.minecraft.client.render.VertexConsumer;
 import net.minecraft.util.Identifier;
 import org.joml.Matrix4f;
-import rich.util.render.сliemtpipeline.ClientPipelines;
+import rich.util.render.clientpipeline.ClientPipelines;
 
 public class ParticleRenderer {
 

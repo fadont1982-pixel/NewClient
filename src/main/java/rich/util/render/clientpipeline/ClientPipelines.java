@@ -1,4 +1,4 @@
-package rich.util.render.сliemtpipeline;
+package rich.util.render.clientpipeline;
 
 import com.mojang.blaze3d.pipeline.BlendFunction;
 import com.mojang.blaze3d.pipeline.RenderPipeline;

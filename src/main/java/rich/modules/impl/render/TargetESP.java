@@ -24,7 +24,7 @@ import rich.modules.module.setting.implement.SliderSettings;
 import rich.util.animations.Animation;
 import rich.util.animations.Direction;
 import rich.util.animations.OutBack;
-import rich.util.render.сliemtpipeline.ClientPipelines;
+import rich.util.render.clientpipeline.ClientPipelines;
 import rich.util.render.Render3D;
 import rich.util.timer.StopWatch;
 import lombok.AccessLevel;

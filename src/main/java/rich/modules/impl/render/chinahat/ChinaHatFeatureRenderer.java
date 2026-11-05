@@ -14,7 +14,7 @@ import net.minecraft.util.math.RotationAxis;
 import org.joml.Matrix4f;
 import rich.modules.impl.render.ChinaHat;
 import rich.util.ColorUtil;
-import rich.util.render.сliemtpipeline.ClientPipelines;
+import rich.util.render.clientpipeline.ClientPipelines;
 
 public class ChinaHatFeatureRenderer extends FeatureRenderer<PlayerEntityRenderState, PlayerEntityModel> {
 
