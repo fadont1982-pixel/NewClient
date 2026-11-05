@@ -29,6 +29,12 @@ dependencies {
     annotationProcessor 'org.projectlombok:lombok:1.18.30'
     modCompileOnly "de.maxhenkel.voicechat:voicechat-api:2.6.0"
     modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.11.4'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+tasks.withType(Test).configureEach {
+    useJUnitPlatform()
 }
 
 processResources {
