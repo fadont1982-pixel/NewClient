@@ -2,9 +2,7 @@ package rich.modules.impl.movement;
 
 import antidaunleak.api.annotation.Native;
 import lombok.Getter;
-import net.minecraft.network.packet.c2s.play.ClientCommandC2SPacket;
 import rich.events.api.EventHandler;
-import rich.events.impl.PacketEvent;
 import rich.events.impl.TickEvent;
 import rich.modules.module.ModuleStructure;
 import rich.modules.module.category.ModuleCategory;
@@ -16,8 +14,8 @@ public class AutoSprint extends ModuleStructure {
         return Instance.get(AutoSprint.class);
     }
 
-    private static volatile boolean serverSprintState = false;
     private static volatile long sprintSuppressUntil = 0;
+    private static volatile boolean attackSprintSuppressed = false;
 
     @Getter
     private final BooleanSetting noReset = new BooleanSetting("Не сбрасывать спринт", "Don't reset sprint for crits")
@@ -28,39 +26,16 @@ public class AutoSprint extends ModuleStructure {
         settings(noReset);
     }
 
-    @EventHandler
-    @Native(type = Native.Type.VMProtectBeginMutation)
-    public void onPacket(PacketEvent event) {
-        if (event.getType() != PacketEvent.Type.SEND)
-            return;
-        if (!(event.getPacket() instanceof ClientCommandC2SPacket packet))
-            return;
-
-        if (packet.getMode() == ClientCommandC2SPacket.Mode.START_SPRINTING) {
-            if (serverSprintState) {
-                event.cancel();
-                return;
-            }
-            serverSprintState = true;
-        } else if (packet.getMode() == ClientCommandC2SPacket.Mode.STOP_SPRINTING) {
-            if (!serverSprintState) {
-                event.cancel();
-                return;
-            }
-            serverSprintState = false;
-        }
-    }
-
     public static void suppressSprint(long ms) {
         sprintSuppressUntil = System.currentTimeMillis() + ms;
     }
 
     public static boolean isSprintSuppressed() {
-        return System.currentTimeMillis() < sprintSuppressUntil;
+        return attackSprintSuppressed || System.currentTimeMillis() < sprintSuppressUntil;
     }
 
-    public static void resetServerState() {
-        serverSprintState = false;
+    public static void setAttackSprintSuppressed(boolean suppressed) {
+        attackSprintSuppressed = suppressed;
     }
 
     @EventHandler
@@ -88,9 +63,4 @@ public class AutoSprint extends ModuleStructure {
         }
     }
 
-    @Override
-    @Native(type = Native.Type.VMProtectBeginMutation)
-    public void deactivate() {
-        resetServerState();
-    }
 }

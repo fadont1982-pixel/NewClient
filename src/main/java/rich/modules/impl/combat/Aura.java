@@ -113,12 +113,18 @@ public class Aura extends ModuleStructure {
 
     @EventHandler
     public void onRotationUpdate(RotationUpdateEvent e) {
+        if (mc.player == null || mc.world == null) {
+            Initialization.getInstance().getManager().getAttackPerpetrator().getAttackHandler().resetPendingState();
+            target = null;
+            lastTarget = null;
+            return;
+        }
         switch (e.getType()) {
             case EventType.PRE -> {
                 LivingEntity previousTarget = target;
                 target = updateTarget();
 
-                if (previousTarget != null && target == null) {
+                if (previousTarget != target) {
                     Initialization.getInstance().getManager()
                             .getAttackPerpetrator()
                             .getAttackHandler()
@@ -220,7 +226,7 @@ public class Aura extends ModuleStructure {
             }
 
             case "Snap" -> {
-                if (attackHandler.canAttack(config, 0)) {
+                if (attackHandler.canAttack(config, 0) || attackHandler.isSprintResetArmed()) {
                     controller.rotateTo(rotation, target, 0, rotationConfig, TaskPriority.HIGH_IMPORTANCE_1, this);
                 }
             }

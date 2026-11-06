@@ -6,6 +6,8 @@ import lombok.Setter;
 import lombok.experimental.FieldDefaults;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
+import net.minecraft.client.network.ClientPlayerEntity;
+import net.minecraft.client.world.ClientWorld;
 import net.minecraft.entity.EntityPose;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.effect.StatusEffects;
@@ -47,22 +49,25 @@ public class StrikeManager implements IMinecraft {
     private int count = 0;
     private int ticksOnBlock = 0;
     private int lastSelectedSlot = -1;
+    private ClientPlayerEntity slotOwner;
+    private ClientWorld slotWorld;
     private final StopWatch restoreWatch = new StopWatch();
 
-    private boolean sprintResetArmed = false;
-    private int sprintResetReadyTick = 0;
-    private boolean sprintResetShouldRestore = false;
+    private final SprintResetState sprintReset = new SprintResetState();
 
     private static final int RESTORE_DELAY_MS = 120;
 
     void tick() {
+        updateSprintReset(Aura.target);
+
         if (mc.player != null && mc.player.isOnGround()) {
             ticksOnBlock++;
         } else {
             ticksOnBlock = 0;
         }
 
-        if (lastSelectedSlot != -1 && restoreWatch.finished(RESTORE_DELAY_MS)) {
+        if (lastSelectedSlot != -1 && (mc.player != slotOwner || mc.world != slotWorld
+                || restoreWatch.finished(RESTORE_DELAY_MS))) {
             restoreSlot();
         }
     }
@@ -111,6 +116,9 @@ public class StrikeManager implements IMinecraft {
         if (currentSlot == axeSlot) return false;
 
         lastSelectedSlot = currentSlot;
+        slotOwner = mc.player;
+        slotWorld = mc.world;
+        restoreWatch.reset();
         InventoryUtils.selectSlot(axeSlot);
         if (mc.getNetworkHandler() != null) {
             mc.getNetworkHandler().sendPacket(new UpdateSelectedSlotC2SPacket(axeSlot));
@@ -120,16 +128,23 @@ public class StrikeManager implements IMinecraft {
     }
 
     private void restoreSlot() {
-        if (lastSelectedSlot != -1) {
-            InventoryUtils.selectSlot(lastSelectedSlot);
-            if (mc.getNetworkHandler() != null) {
-                mc.getNetworkHandler().sendPacket(new UpdateSelectedSlotC2SPacket(lastSelectedSlot));
-            }
-            lastSelectedSlot = -1;
+        int slot = lastSelectedSlot;
+        boolean sameSession = mc.player != null && mc.world != null
+                && mc.player == slotOwner && mc.world == slotWorld;
+        lastSelectedSlot = -1;
+        slotOwner = null;
+        slotWorld = null;
+        if (slot == -1 || !sameSession) return;
+
+        InventoryUtils.selectSlot(slot);
+        if (mc.getNetworkHandler() != null) {
+            mc.getNetworkHandler().sendPacket(new UpdateSelectedSlotC2SPacket(slot));
         }
     }
 
     public void resetPendingState() {
+        finishSprintReset();
+        restoreSlot();
     }
 
     private boolean hasAnyMovementInput() {
@@ -269,34 +284,36 @@ public class StrikeManager implements IMinecraft {
         return mc.player.isSprinting();
     }
 
-    private void armSprintReset() {
-        if (mc.player == null)
-            return;
-        sprintResetArmed = true;
-        sprintResetReadyTick = mc.player.age + 2;
-        sprintResetShouldRestore = true;
-        AutoSprint.suppressSprint(300);
-        mc.options.sprintKey.setPressed(false);
+    private void armSprintReset(StrikerConstructor.AttackPerpetratorConfigurable config) {
+        sprintReset.arm(mc.player, mc.world, config.getTarget(), mc.player.age);
+        AutoSprint.setAttackSprintSuppressed(true);
         mc.player.setSprinting(false);
     }
 
     private void finishSprintReset() {
-        if (!sprintResetArmed)
-            return;
-        if (sprintResetShouldRestore && mc.player != null && !mc.player.isGliding()) {
-            mc.options.sprintKey.setPressed(isPhysicalSprintPressed());
-        }
-        sprintResetArmed = false;
-        sprintResetReadyTick = 0;
-        sprintResetShouldRestore = false;
+        sprintReset.clear();
+        AutoSprint.setAttackSprintSuppressed(false);
     }
 
-    private boolean isPhysicalSprintPressed() {
-        if (mc.player == null || mc.options.sprintKey == null)
-            return false;
-        return net.minecraft.client.util.InputUtil.isKeyPressed(
-                mc.getWindow(),
-                net.minecraft.client.util.InputUtil.fromTranslationKey(mc.options.sprintKey.getBoundKeyTranslationKey()).getCode());
+    public boolean isSprintResetArmed() {
+        return sprintReset.isPending();
+    }
+
+    private void updateSprintReset(LivingEntity target) {
+        if (!sprintReset.isPending()) return;
+
+        Aura aura = Aura.getInstance();
+        if (mc.player == null || mc.world == null || aura == null || !aura.isState()
+                || !aura.getResetSprintMode().isSelected("Легитный")
+                || target == null || !target.isAlive()
+                || !sprintReset.isValid(mc.player, mc.world, target, mc.player.age)
+                || shouldWaitForEating() || isHoldingMace() || isInWater() || mc.player.isGliding()) {
+            finishSprintReset();
+            return;
+        }
+
+        // The hold is bounded by game ticks, not a wall-clock timer which can expire mid-reset.
+        mc.player.setSprinting(false);
     }
 
     private boolean canCritNow() {
@@ -327,84 +344,87 @@ public class StrikeManager implements IMinecraft {
     }
 
     void handleAttack(StrikerConstructor.AttackPerpetratorConfigurable config) {
-        if (config.getTarget() == null || !config.getTarget().isAlive()) {
+        if (mc.player == null || mc.world == null || mc.interactionManager == null
+                || mc.getNetworkHandler() == null || config == null
+                || config.getTarget() == null || !config.getTarget().isAlive()) {
+            resetPendingState();
             return;
         }
 
+        updateSprintReset(config.getTarget());
+
         if (shouldWaitForEating()) {
+            finishSprintReset();
             return;
         }
 
         if (isHoldingMace()) {
+            finishSprintReset();
             handleMaceAttack(config);
             return;
         }
 
         boolean elytraMode = checkElytraMode(config);
         if (elytraMode && !checkElytraRaycast(config)) {
+            finishSprintReset();
             return;
         }
 
         if (!RaycastAngle.rayTrace(config)) {
+            finishSprintReset();
             return;
         }
 
         if (!isLookingAtTarget(config)) {
+            finishSprintReset();
             return;
         }
 
         if (!clickScheduler.isCooldownComplete(0)) {
-            return;
-        }
-
-        if (!canCritNow()) {
-            return;
-        }
-
-        boolean swappedToAxe = swapToAxeIfShield(config);
-
-        preAttackEntity(config);
-
-        if (sprintResetArmed && (config.getTarget() == null || !config.getTarget().isAlive()
-                || shouldWaitForEating() || !clickScheduler.isCooldownComplete(0) || !canCritNow())) {
             finishSprintReset();
+            return;
         }
 
-        if (sprintResetArmed && mc.player.age < sprintResetReadyTick) {
-            // still waiting for server to register sprint stop
+        boolean legitReset = Aura.getInstance().getResetSprintMode().isSelected("Легитный");
+        boolean shouldReset = shouldResetSprintForCrit();
+        boolean critReady = canCritNow();
+
+        if (legitReset && (shouldReset || sprintReset.isPending())) {
+            // Prepare during the existing short crit look-ahead, but still recheck the actual crit below.
+            if (!critReady && !canAttack(config, SprintResetState.WAIT_TICKS)) {
+                finishSprintReset();
+                return;
+            }
+            if (!sprintReset.isPending()) {
+                armSprintReset(config);
+                return;
+            }
+            if (!sprintReset.isReady(mc.player.age)) {
+                return;
+            }
         }
 
-        boolean wasSprinting = mc.player.isSprinting();
-        boolean shouldReset = wasSprinting && shouldResetSprintForCrit();
+        if (!critReady) {
+            return;
+        }
 
-        if (Aura.getInstance().getResetSprintMode().isSelected("Легитный")) {
-            if (shouldReset && !sprintResetArmed) {
-                armSprintReset();
-                return;
-            }
-            if (sprintResetArmed && mc.player.age < sprintResetReadyTick) {
-                return;
-            }
-        } else {
-            if (shouldReset) {
+        boolean packetResetSent = false;
+        try {
+            // Do not swap weapons or release a shield while the legit reset is still waiting.
+            swapToAxeIfShield(config);
+            preAttackEntity(config);
+            if (!legitReset && shouldReset) {
                 mc.getNetworkHandler()
                         .sendPacket(new ClientCommandC2SPacket(mc.player, ClientCommandC2SPacket.Mode.STOP_SPRINTING));
+                packetResetSent = true;
             }
-        }
-
-        executeAttack(config);
-
-        if (swappedToAxe) {
-            restoreWatch.reset();
-        }
-
-        if (Aura.getInstance().getResetSprintMode().isSelected("Пакетный") && shouldReset) {
-            mc.getNetworkHandler()
-                    .sendPacket(new ClientCommandC2SPacket(mc.player, ClientCommandC2SPacket.Mode.START_SPRINTING));
-        }
-
-        if (sprintResetArmed) {
+            executeAttack(config);
+        } finally {
             finishSprintReset();
+            if (packetResetSent && mc.player != null && mc.getNetworkHandler() != null) {
+                mc.getNetworkHandler()
+                        .sendPacket(new ClientCommandC2SPacket(mc.player, ClientCommandC2SPacket.Mode.START_SPRINTING));
+            }
         }
     }
 

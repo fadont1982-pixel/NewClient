@@ -17,10 +17,12 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 import rich.events.api.EventManager;
 import rich.events.api.types.EventType;
 import rich.events.impl.*;
 import rich.modules.impl.combat.aura.AngleConnection;
+import rich.modules.impl.movement.AutoSprint;
 import rich.util.move.MoveUtil;
 
 import static rich.IMinecraft.mc;
@@ -53,6 +55,14 @@ public abstract class ClientPlayerEntityMixin extends AbstractClientPlayerEntity
     public void tick(CallbackInfo info) {
         if (client.player != null && client.world != null) {
             EventManager.callEvent(new TickEvent());
+        }
+    }
+
+    @Inject(method = "canStartSprinting", at = @At("HEAD"), cancellable = true)
+    private void richBlockSprintDuringReset(CallbackInfoReturnable<Boolean> cir) {
+        // Covers a held/toggled sprint binding and double-tap without overwriting the binding itself.
+        if (AutoSprint.isSprintSuppressed()) {
+            cir.setReturnValue(false);
         }
     }
 
